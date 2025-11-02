@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Admin UI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .text-list {
+            margin-top: 20px;
+        }
+        .text-item {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 10px;
+            background-color: #fafafa;
+        }
+        .text-item h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .text-meta {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .text-content {
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            white-space: pre-wrap;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .alert {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .alert-error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .alert-warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .github-status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .github-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+        }
+        .github-error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+        .delete-btn {
+            background-color: #dc3545;
+            margin-left: 10px;
+        }
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Text Management Admin UI</h1>
+        <div id="alerts"></div>
+        
+        <div class="form-group">
+            <label for="textKey">Text Key:</label>
+            <input type="text" id="textKey" placeholder="e.g., welcome-message">
+        </div>
+        
+        <div class="form-group">
+            <label for="textContent">Content:</label>
+            <textarea id="textContent" placeholder="Enter the text content..."></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="approvedBy">Approved By:</label>
+            <input type="text" id="approvedBy" placeholder="Your username">
+        </div>
+        
+        <button onclick="saveText()" id="saveBtn">Save Text</button>
+        <button onclick="loadTexts()" style="margin-left: 10px;">Refresh</button>
+        
+        <div id="loading" class="loading" style="display: none;"></div>
+    </div>
+
+    <div class="container text-list">
+        <h2>Existing Texts</h2>
+        <div id="textList"></div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        
+        function showAlert(message, type = 'success') {
+            const alertsContainer = document.getElementById('alerts');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alertsContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+        
+        function setLoading(loading) {
+            document.getElementById('loading').style.display = loading ? 'inline-block' : 'none';
+            document.getElementById('saveBtn').disabled = loading;
+        }
+        
+        async function saveText() {
+            const key = document.getElementById('textKey').value.trim();
+            const content = document.getElementById('textContent').value.trim();
+            const approvedBy = document.getElementById('approvedBy').value.trim();
+            
+            if (!key || !content) {
+                showAlert('Please fill in both key and content fields', 'error');
+                return;
+            }
+            
+            setLoading(true);
+            
+            try {
+                const response = await fetch(`${API_BASE}/texts/${encodeURIComponent(key)}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ content, approvedBy }),
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('Text saved successfully!', 'success');
+                    
+                    // Clear form
+                    document.getElementById('textKey').value = '';
+                    document.getElementById('textContent').value = '';
+                    document.getElementById('approvedBy').value = '';
+                    
+                    // Show GitHub sync status if applicable
+                    if (result.githubSync) {
+                        if (result.githubSync.success) {
+                            showAlert(`GitHub PR created: ${result.githubSync.prUrl}`, 'success');
+                        } else if (result.githubSync.noChanges) {
+                            showAlert('No changes detected - GitHub sync not needed', 'success');
+                        } else {
+                            showAlert(`Text saved but GitHub sync failed: ${result.githubSync.error}`, 'warning');
+                        }
+                    }
+                    
+                    // Refresh the list
+                    loadTexts();
+                } else if (response.status === 207) {
+                    // Partial success - text saved but GitHub sync failed
+                    showAlert('Text saved but GitHub sync failed. Check below for details.', 'warning');
+                    
+                    if (result.githubSync && result.githubSync.error) {
+                        showAlert(`GitHub error: ${result.githubSync.error}`, 'error');
+                    }
+                    
+                    loadTexts();
+                } else {
+                    showAlert(`Error: ${result.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`Network error: ${error.message}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        async function deleteText(key) {
+            if (!confirm(`Are you sure you want to delete "${key}"?`)) {
+                return;
+            }
+            
+            setLoading(true);
+            
+            try {
+                const response = await fetch(`${API_BASE}/texts/${encodeURIComponent(key)}`, {
+                    method: 'DELETE',
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('Text deleted successfully!', 'success');
+                    
+                    // Show GitHub sync status if applicable
+                    if (result.githubSync) {
+                        if (result.githubSync.success) {
+                            showAlert(`GitHub PR created for deletion: ${result.githubSync.prUrl}`, 'success');
+                        } else {
+                            showAlert(`Text deleted but GitHub sync failed: ${result.githubSync.error}`, 'warning');
+                        }
+                    }
+                    
+                    loadTexts();
+                } else if (response.status === 207) {
+                    showAlert('Text deleted but GitHub sync failed', 'warning');
+                    loadTexts();
+                } else {
+                    showAlert(`Error: ${result.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`Network error: ${error.message}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        async function loadTexts() {
+            try {
+                const response = await fetch(`${API_BASE}/texts`);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    displayTexts(result.data.texts);
+                } else {
+                    showAlert('Failed to load texts', 'error');
+                }
+            } catch (error) {
+                showAlert(`Network error: ${error.message}`, 'error');
+            }
+        }
+        
+        function displayTexts(texts) {
+            const textList = document.getElementById('textList');
+            
+            if (Object.keys(texts).length === 0) {
+                textList.innerHTML = '<p>No texts found. Create your first text above!</p>';
+                return;
+            }
+            
+            textList.innerHTML = '';
+            
+            Object.entries(texts).forEach(([key, text]) => {
+                const textItem = document.createElement('div');
+                textItem.className = 'text-item';
+                
+                const metaInfo = [];
+                if (text.approvedBy) metaInfo.push(`by ${text.approvedBy}`);
+                if (text.approvedAt) metaInfo.push(`at ${new Date(text.approvedAt).toLocaleString()}`);
+                metaInfo.push(`version ${text.version}`);
+                
+                textItem.innerHTML = `
+                    <h3>${key}</h3>
+                    <div class="text-meta">Approved ${metaInfo.join(' ')}</div>
+                    <div class="text-content">${text.content}</div>
+                    <button class="delete-btn" onclick="deleteText('${key}')">Delete</button>
+                `;
+                
+                textList.appendChild(textItem);
+            });
+        }
+        
+        // Load texts on page load
+        document.addEventListener('DOMContentLoaded', loadTexts);
+        
+        // Add Enter key support for form
+        document.getElementById('textContent').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                saveText();
+            }
+        });
+    </script>
+</body>
+</html>
